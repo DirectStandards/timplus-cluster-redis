@@ -1,0 +1,41 @@
+package org.directtruststandards.timplus.cluster.cache;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.context.annotation.Configuration;
+
+import redis.embedded.RedisServer;
+
+@SpringBootApplication
+@Configuration
+public class TestApplication 
+{
+	public static void main(String[] args) 
+	{
+		SpringApplication.run(TestApplication.class, args);
+	}
+	
+    private RedisServer redisServer;
+
+    
+    public TestApplication(RedisProperties redisProperties) 
+    {
+        this.redisServer = new RedisServer(redisProperties.getPort());
+    }
+
+    @PostConstruct
+    public void postConstruct() 
+    {
+        redisServer.start();
+    }
+
+    @PreDestroy
+    public void preDestroy() 
+    {
+        redisServer.stop();
+    }	
+}
