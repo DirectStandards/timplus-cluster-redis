@@ -4,11 +4,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.contains;
 
+import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringNodeIdListRouteCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringStringListRouteCache;
 import org.directtruststandards.timplus.cluster.cache.SpringBaseTest;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.jivesoftware.openfire.session.DomainPair;
@@ -16,10 +19,12 @@ import org.junit.jupiter.api.Test;
 
 public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 {
+	@SuppressWarnings("unchecked")
 	@Test
-	public void testCacheObject_stringType_assertCached()
+	public void testCacheObject_genericType_assertCached()
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<Serializable, Serializable> cache = 
+				(Cache<Serializable, Serializable>)new RedisDelegatedClusterCacheFactory().createCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
@@ -29,16 +34,18 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_stringListType_assertCached()
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, ArrayList<String>> cache = new StringStringListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		final String str1 = "value1";
 		final String str2 = "value2";
 		
-		List<String> strings = new ArrayList<>();
+		ArrayList<String> strings = new ArrayList<>();
 		strings.add(str1);
 		strings.add(str2);		
 		
-		final List<String> retStrings = (List<String>)cache.put("TestKey", strings);
+		cache.put("TestKey", strings);
+		
+		final List<String> retStrings = (List<String>)cache.get("TestKey");
 		
 		assertThat(retStrings, contains(str1, str2));
 	}		
@@ -46,7 +53,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_nodeIdList_assertCached()
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, List<NodeID>> cache = new StringNodeIdListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		NodeID node1 = NodeID.getInstance(new byte[] {0,0,0,1});
 		NodeID node2 = NodeID.getInstance(new byte[] {0,0,0,1});
@@ -59,27 +66,13 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		
 		List<NodeID> retNodes = (List<NodeID>)cache.get("TestKey");
 		
-		assertThat(nodes, contains(node1, node2));
-	}	
-	
-	@Test
-	public void testCacheObject_nodeId_assertCached()
-	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
-		
-		NodeID node = NodeID.getInstance(new byte[] {0,0,0,1});
-		
-		cache.put("TestKey", node);
-		
-		NodeID retNode = (NodeID)cache.get("TestKey");
-		
-		assertEquals(retNode, cache.get("TestKey"));
+		assertThat(retNodes, contains(node1, node2));
 	}	
 	
 	@Test
 	public void testCacheObject_domainPairKey_nodeIdValue_assertCached()
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<DomainPair, NodeID> cache = new DomainPairNodeIdRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		NodeID node = NodeID.getInstance(new byte[] {0,0,0,1});
 		
@@ -89,4 +82,49 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		
 		assertEquals(node, cache.get(key));
 	}		
+	
+	@Test
+	public void testCacheObject_customAggregate_assertCached()
+	{
+		final CustomAggregate aggr = new  CustomAggregate();
+		
+		aggr.setValue("test");
+		
+		final CustomAggregateRedisClusteredCache<String, CustomAggregate> cache = 
+				new CustomAggregateRedisClusteredCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		cache.put("TestKey", aggr);
+		
+		assertEquals(aggr.getValue(), cache.get("TestKey").getValue());
+	}	
+	
+	protected static class CustomAggregate
+	{
+		private String value;
+		
+		public CustomAggregate()
+		{
+			
+		}
+		
+		public String getValue() 
+		{
+			return value;
+		}
+
+		public void setValue(String value) 
+		{
+			this.value = value;
+		}		
+	}
+	
+	protected static class CustomAggregateRedisClusteredCache<K extends String, V extends CustomAggregate> extends RedisClusteredCache<K, V>
+	{
+
+		public CustomAggregateRedisClusteredCache(java.lang.String name, long maxSize, long maxLifetime,
+				NodeID nodeId) {
+			super(name, maxSize, maxLifetime, nodeId);
+		}
+
+	}
 }

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.directtruststandards.timplus.cluster.cache.RedisCacheEntry;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.GenericRouteCache;
 import org.directtruststandards.timplus.cluster.cache.SpringBaseTest;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.junit.jupiter.api.Test;
@@ -21,27 +22,23 @@ import org.junit.jupiter.api.Test;
 public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 {
 	@Test
-	public void testCacheObjects_localCache_cacheAndRetrieve() throws Exception
+	public void testCacheObjects_cacheAndRetrieve() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
-		assertEquals("TestValue", cache.locallyCached.get("TestKey"));
-		
-		assertEquals("TestValue", cache.remotelyCached.findById("JUnitCacheTestKey").get().getValue());
+		//assertEquals("TestValue", objectMapper.readValue(cache.remotelyCached.findById("JUnitCacheTestKey").get().getValue(), Object.class));
 		
 		assertEquals("TestValue", cache.get("TestKey"));
 	}
 	
 	@Test
-	public void testCacheObjects_localCache_cacheAndRemove() throws Exception
+	public void testCacheObjects_cacheAndRemove() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
-		
-		assertEquals("TestValue", cache.locallyCached.get("TestKey"));
 		
 		assertEquals("TestValue", cache.get("TestKey"));
 		
@@ -53,9 +50,9 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	}	
 	
 	@Test
-	public void testCacheObjects_localCache_cacheAndContainsKey() throws Exception
+	public void testCacheObjects_cacheAndContainsKey() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
@@ -63,9 +60,9 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	}	
 	
 	@Test
-	public void testCacheObjects_localCache_cacheAndContainsValue() throws Exception
+	public void testCacheObjects_cacheAndContainsValue() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
@@ -85,14 +82,13 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		assertEquals(entryValue, cache.get(entryKey));
-		assertEquals(0, cache.locallyCached.size());
 	}
 	
 	@Test
@@ -108,11 +104,11 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		assertTrue(cache.containsKey(entryKey));
 	}	
@@ -130,11 +126,11 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 50000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 50000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		assertTrue(cache.containsValue(entryValue));
 	}		
@@ -152,11 +148,11 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		final Collection<?> values = cache.values();
 		
@@ -178,13 +174,13 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
-		final Set<Entry<Object, Object>> entrySet = cache.entrySet();
+		final Set<Entry<Serializable, Serializable>> entrySet = cache.entrySet();
 		
 		assertEquals(1, entrySet.size());
 		
@@ -208,13 +204,13 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
-		final Set<Entry<Object, Object>> entrySet = cache.entrySet();
+		final Set<Entry<Serializable, Serializable>> entrySet = cache.entrySet();
 		
 		assertEquals(1, entrySet.size());
 		
@@ -228,7 +224,7 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	@Test
 	public void testCacheObjects_retrieveSize() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
@@ -240,7 +236,7 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	@Test
 	public void testCacheObjects_isEmpty() throws Exception
 	{
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		assertTrue(cache.isEmpty());
 		
@@ -262,11 +258,11 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		final String remoteNodeCacheName = cacheName + remoteNode.toString();
 		
-		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, (Serializable)entryValue, 600000L);
+		final RedisCacheEntry entry = new RedisCacheEntry(cacheName + entryKey , cacheName, remoteNodeCacheName, objectMapper.writeValueAsString(entryValue), 600000L);
 		
 		redisRepo.save(entry);
 		
-		final RedisClusteredCache cache = new RedisClusteredCache(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.purgeClusteredNodeCaches(NodeID.getInstance(new byte[] {0,0,0,0}));
 		
@@ -280,18 +276,16 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	@Test
 	public void testCacheObjects_clear() throws Exception
 	{	
-		final RedisClusteredCache cache = new RedisClusteredCache("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
 		
 		cache.put("TestKey", "TestValue");
 		
 		assertEquals("TestValue", cache.get("TestKey"));
 		
-		assertEquals(1, cache.locallyCached.size());
 		assertEquals(1, cache.size());
 		
 		cache.clear();
 		
-		assertEquals(0, cache.locallyCached.size());
 		assertEquals(0, cache.size());
 	}		
 }

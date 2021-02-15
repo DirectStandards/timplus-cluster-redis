@@ -2,8 +2,6 @@ package org.directtruststandards.timplus.cluster.cache;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import java.io.Serializable;
-
 import org.springframework.data.annotation.Id;
 import org.springframework.data.redis.core.RedisHash;
 import org.springframework.data.redis.core.TimeToLive;
@@ -40,7 +38,7 @@ public class RedisCacheEntry
 	@Indexed
 	private String nodeCacheName;
 	
-	private Serializable value;
+	private String value;
 	
 	@TimeToLive(unit = MILLISECONDS)
 	private Long expiration;	

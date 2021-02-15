@@ -1,6 +1,7 @@
 package org.jivesoftware.util.cache;
 
-import java.io.Serializable;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Collections;
@@ -13,10 +14,12 @@ import java.util.Set;
 import org.directtruststandards.timplus.cluster.cache.CachingConfiguration;
 import org.directtruststandards.timplus.cluster.cache.RedisCacheEntry;
 import org.directtruststandards.timplus.cluster.cache.RedisCacheRepository;
-import org.jivesoftware.openfire.XMPPServer;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Example;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * A Redis back clustered cache.  Entries added by the local node cluster member are added
@@ -26,7 +29,7 @@ import org.springframework.data.domain.Example;
  * @since 1.0
  *
  */
-public class RedisClusteredCache implements Cache
+public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 {
     protected long maxCacheSize;
 
@@ -36,11 +39,15 @@ public class RedisClusteredCache implements Cache
 	
     protected final NodeID nodeId;
     
-    protected DefaultCache locallyCached;
-    
     protected RedisCacheRepository remotelyCached;
     
     protected String nodeCacheName;
+    
+    protected ObjectMapper objectMapper;
+    
+    protected Class<K> keyType; 
+    
+    protected Type valueType; 
     
     public RedisClusteredCache(final String name, final long maxSize, final long maxLifetime, final NodeID nodeId)
     {
@@ -49,8 +56,6 @@ public class RedisClusteredCache implements Cache
     	this.maxLifetime = maxLifetime;
     	this.nodeId = nodeId;
     	
-    	locallyCached = new DefaultCache<>(name, maxSize, maxLifetime);
-    	
 		final ApplicationContext ctx = CachingConfiguration.getApplicationContext();
 		
 		if (ctx == null)
@@ -58,7 +63,14 @@ public class RedisClusteredCache implements Cache
 
 		remotelyCached = ctx.getBean(RedisCacheRepository.class);
 		
+		objectMapper = ctx.getBean(ObjectMapper.class);
+		
 		nodeCacheName = name + nodeId.toString();
+
+		// Needed to get full type information for performing deserialization of generics
+        final Type superClass = getClass().getGenericSuperclass();
+        
+        valueType =  ((ParameterizedType) superClass).getActualTypeArguments()[1];
     }
     
 	@Override
@@ -104,53 +116,56 @@ public class RedisClusteredCache implements Cache
 	@Override
 	public int getCacheSize() 
 	{
-		return (int)locallyCached.getCacheSize();
+		return -1;
 	}
 
 	@Override
 	public long getCacheHits() 
 	{
-		return locallyCached.getCacheHits();
+		return 0;
 	}
 
 	@Override
 	public long getCacheMisses() 
 	{
-		return locallyCached.getCacheMisses();
+		return 0;
 	}
 
 	@Override
-	public Collection<Object> values() 
+	public Collection<V> values() 
 	{
-		final Collection<Object> retVal = new LinkedList<>();
+		final Collection<V> retVal = new LinkedList<>();
 		
 		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);
 		
-		values.forEach(val -> retVal.add(val.getValue()));
+		values.forEach(val -> retVal.add(deserializedRedisCacheEntryValue(val.getValue())));
 		
 		return Collections.unmodifiableCollection(retVal);
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	@Override
-	public Set<Entry<Object, Object>> entrySet() 
+	public Set<Entry<K, V>> entrySet() 
 	{
-		final Set<Entry<Object, Object>> retVal = new HashSet<>();
+		final Set<Entry<K, V>> retVal = new HashSet<>();
 		
 		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);		
 		
-		values.forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getKey().substring(name.length()), val.getValue())));
+		values.forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getKey().substring(name.length()), 
+				deserializedRedisCacheEntryValue(val.getValue()))));
 		
 		return Collections.unmodifiableSet(retVal);
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
-	public Set<Object> keySet() 
+	public Set<K> keySet() 
 	{
-		final Set<Object> retVal = new HashSet<>();
+		final Set<K> retVal = new HashSet<>();
 		
 		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);
 		
-		values.forEach(val -> retVal.add(val.getKey().substring(name.length())));
+		values.forEach(val -> retVal.add((K)val.getKey().substring(name.length())));
 		
 		return Collections.unmodifiableSet(retVal);
 	}
@@ -158,14 +173,14 @@ public class RedisClusteredCache implements Cache
 	@Override
 	public int size() 
 	{
-		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (Serializable)null, maxLifetime);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (String)null, maxLifetime);
 		return (int)remotelyCached.count(Example.of(probe));
 	}
 
 	@Override
 	public boolean isEmpty() 
 	{
-		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (Serializable)null, maxLifetime);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (String)null, maxLifetime);
 		
 		return remotelyCached.count(Example.of(probe)) == 0;
 	}
@@ -173,59 +188,64 @@ public class RedisClusteredCache implements Cache
 	@Override
 	public boolean containsKey(Object key) 
 	{
-		return locallyCached.containsKey(key) || remotelyCached.existsById(name + key);
+		return remotelyCached.existsById(name + key);
 	}
 
 	@Override
 	public boolean containsValue(Object value) 
 	{
-		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (Serializable)value, maxLifetime);
+		RedisCacheEntry probe = null;
+		try
+		{
+			final String mappedValue = objectMapper.writeValueAsString(value);
 		
-		return locallyCached.containsValue(value) || (int)remotelyCached.count(Example.of(probe)) != 0;
+			probe = new RedisCacheEntry((String)null, name, (String)null, mappedValue, maxLifetime);
+		}
+		catch (Exception e)
+		{
+			probe = new RedisCacheEntry((String)null, name, (String)null, null, maxLifetime);
+		}
+		
+		return (int)remotelyCached.count(Example.of(probe)) != 0;
 	}
 
 	@Override
-	public Object get(Object key) 
+	public V get(Object key) 
 	{
-		Object retVal = locallyCached.get(key);
-		if (retVal == null)
-		{
-			final Optional<RedisCacheEntry> entry = remotelyCached.findById(name + key);
-			
-			if (entry.isPresent())
-				retVal = entry.get().getValue();
-		}
+		V retVal = null;
+
+		final Optional<RedisCacheEntry> entry = remotelyCached.findById(name + key);
+		
+		if (entry.isPresent())
+			retVal = deserializedRedisCacheEntryValue(entry.get().getValue());
 		
 		return retVal;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
-	public Object put(Object key, Object value) 
+	public V put(Object key, Object value) 
 	{
-		locallyCached.put((Serializable)key, (Serializable)value);
-
-		final RedisCacheEntry entry = new RedisCacheEntry(name + key , name, nodeCacheName, (Serializable)value, maxLifetime);	
 		
+		remotelyCached.save(createSafeRedisCacheEntry(key, value));
 		
-		remotelyCached.save(entry);
-		
-		return value;
+		return (V)value;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
-	public Object remove(Object key) 
+	public V remove(Object key) 
 	{
-		final Serializable retVal = locallyCached.remove(key);
+		final Object retVal = remotelyCached.findById(name + key);
 		
 		remotelyCached.deleteById(name + key);
 		
-		return retVal;
+		return (V)retVal;
 	}
 
 	@Override
 	public void clear() 
 	{
-		locallyCached.clear();
 		
 		remotelyCached.deleteAll(remotelyCached.findByNodeCacheName(nodeCacheName));
 	}
@@ -233,28 +253,61 @@ public class RedisClusteredCache implements Cache
 	@Override
 	public void purgeClusteredNodeCaches(NodeID node) 
 	{
-		if (XMPPServer.getInstance() != null && node.equals(XMPPServer.getInstance().getNodeID()))
-			locallyCached.clear();
 		
 		remotelyCached.deleteAll(remotelyCached.findByNodeCacheName(name + node.toString()));
 		
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public void putAll(Map m) 
 	{
 		// TODO Auto-generated method stub
 		if (m != null && m.size() > 0)
 		{
-			locallyCached.putAll(m);
-		
 			m.forEach((key, value) -> 
-			{
-				final RedisCacheEntry entry = new RedisCacheEntry(name + key , name, nodeCacheName, (Serializable)value, maxLifetime);
-				
-				remotelyCached.save(entry);				
+			{				
+				remotelyCached.save(createSafeRedisCacheEntry(key, value));				
 			});
 		}
 	}
 
+	protected RedisCacheEntry createSafeRedisCacheEntry(Object key, Object value)
+	{
+		try
+		{
+			final String mappedValue = objectMapper.writeValueAsString(value);
+		
+			return new RedisCacheEntry(name + key , name, nodeCacheName, mappedValue, maxLifetime);	
+		}
+		catch (Exception e)
+		{
+			return new RedisCacheEntry(name + key , name, nodeCacheName, null, maxLifetime);	
+		}
+	}
+	
+	protected V deserializedRedisCacheEntryValue(String serialized)
+	{
+		try
+		{
+			return objectMapper.readValue(serialized, getDeserilizedValueType());
+		}
+		catch (Exception e)
+		{
+			return null;
+		}
+	}
+	
+	public <T> TypeReference<T> getDeserilizedValueType()
+	{
+        return forType(valueType);
+	}
+	
+	protected <T> TypeReference<T> forType(final Type type) 
+	{
+		return new TypeReference<T>()
+		{
+		    public Type getType() { return type; }
+		};
+	}
 }
