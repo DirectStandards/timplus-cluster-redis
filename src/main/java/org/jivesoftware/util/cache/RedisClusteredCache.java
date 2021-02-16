@@ -232,15 +232,18 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		return (V)value;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public V remove(Object key) 
 	{
-		final Object retVal = remotelyCached.findById(name + key);
+		final Optional<RedisCacheEntry> retVal = remotelyCached.findById(name + key);
 		
-		remotelyCached.deleteById(name + key);
-		
-		return (V)retVal;
+		if (retVal.isPresent())
+		{
+			remotelyCached.deleteById(name + key);
+			return deserializedRedisCacheEntryValue(retVal.get().getValue());
+		}
+		else
+			return null;
 	}
 
 	@Override
