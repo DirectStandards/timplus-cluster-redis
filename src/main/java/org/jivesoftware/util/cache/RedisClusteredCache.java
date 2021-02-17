@@ -3,10 +3,12 @@ package org.jivesoftware.util.cache;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -148,10 +150,10 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	public Set<Entry<K, V>> entrySet() 
 	{
 		final Set<Entry<K, V>> retVal = new HashSet<>();
+
+		Collection<RedisCacheEntry> values = remotelyCached.findByNodeCacheName(name + nodeId.toString());		
 		
-		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);		
-		
-		values.forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getKey().substring(name.length()), 
+		values.forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getClusteredCacheKey().substring(name.length()), 
 				deserializedRedisCacheEntryValue(val.getValue()))));
 		
 		return Collections.unmodifiableSet(retVal);
@@ -163,9 +165,9 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	{
 		final Set<K> retVal = new HashSet<>();
 		
-		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);
+		Collection<RedisCacheEntry> values = remotelyCached.findByNodeCacheName(name + nodeId.toString());
 		
-		values.forEach(val -> retVal.add((K)val.getKey().substring(name.length())));
+		values.forEach(val -> retVal.add((K)val.getClusteredCacheKey().substring(name.length())));
 		
 		return Collections.unmodifiableSet(retVal);
 	}
@@ -173,14 +175,14 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public int size() 
 	{
-		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (String)null, maxLifetime);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, (String)null, name + nodeId.toString(), (String)null, maxLifetime);
 		return (int)remotelyCached.count(Example.of(probe));
 	}
 
 	@Override
 	public boolean isEmpty() 
 	{
-		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name, (String)null, (String)null, maxLifetime);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, (String)null, name + nodeId.toString(), (String)null, maxLifetime);
 		
 		return remotelyCached.count(Example.of(probe)) == 0;
 	}
@@ -188,7 +190,9 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public boolean containsKey(Object key) 
 	{
-		return remotelyCached.existsById(name + key);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, name + key, (String)null, (String)null, (String)null, maxLifetime);
+		
+		return remotelyCached.count(Example.of(probe)) != 0;
 	}
 
 	@Override
@@ -199,27 +203,40 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		{
 			final String mappedValue = objectMapper.writeValueAsString(value);
 		
-			probe = new RedisCacheEntry((String)null, name, (String)null, mappedValue, maxLifetime);
+			probe = new RedisCacheEntry((String)null, (String)null, name, (String)null, mappedValue, maxLifetime);
 		}
 		catch (Exception e)
 		{
-			probe = new RedisCacheEntry((String)null, name, (String)null, null, maxLifetime);
+			probe = new RedisCacheEntry((String)null, (String)null, name, (String)null, null, maxLifetime);
 		}
 		
 		return (int)remotelyCached.count(Example.of(probe)) != 0;
 	}
 
+	@SuppressWarnings("rawtypes")
 	@Override
 	public V get(Object key) 
 	{
-		V retVal = null;
-
-		final Optional<RedisCacheEntry> entry = remotelyCached.findById(name + key);
+		final Collection<RedisCacheEntry> entries = remotelyCached.findByClusteredCacheKey(name + key);
 		
-		if (entry.isPresent())
-			retVal = deserializedRedisCacheEntryValue(entry.get().getValue());
+		if (entries.size() == 0)
+			return null;
 		
-		return retVal;
+		if (entries.size() == 1)
+			return deserializedRedisCacheEntryValue(entries.iterator().next().getValue());
+		
+		final List<Object> items = new ArrayList<>();
+				
+		for (RedisCacheEntry entry : entries)
+		{
+			V val = deserializedRedisCacheEntryValue(entry.getValue());
+			if (val instanceof Collection)
+				items.addAll((Collection)val);
+			else
+				items.add((Object)val);
+		}
+		
+		return (V)items;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -235,11 +252,11 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public V remove(Object key) 
 	{
-		final Optional<RedisCacheEntry> retVal = remotelyCached.findById(name + key);
+		final Optional<RedisCacheEntry> retVal = remotelyCached.findById(name + nodeId.toString() +  key);
 		
 		if (retVal.isPresent())
 		{
-			remotelyCached.deleteById(name + key);
+			remotelyCached.deleteById(name + nodeId.toString() +  key);
 			return deserializedRedisCacheEntryValue(retVal.get().getValue());
 		}
 		else
@@ -249,7 +266,6 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public void clear() 
 	{
-		
 		remotelyCached.deleteAll(remotelyCached.findByNodeCacheName(nodeCacheName));
 	}
 
@@ -257,7 +273,9 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	public void purgeClusteredNodeCaches(NodeID node) 
 	{
 		
-		remotelyCached.deleteAll(remotelyCached.findByNodeCacheName(name + node.toString()));
+		final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());
+		
+		remotelyCached.deleteAll(entries);
 		
 	}
 
@@ -281,11 +299,11 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		{
 			final String mappedValue = objectMapper.writeValueAsString(value);
 		
-			return new RedisCacheEntry(name + key , name, nodeCacheName, mappedValue, maxLifetime);	
+			return new RedisCacheEntry(name + nodeId.toString() +  key, name + key, name, nodeCacheName, mappedValue, maxLifetime);	
 		}
 		catch (Exception e)
 		{
-			return new RedisCacheEntry(name + key , name, nodeCacheName, null, maxLifetime);	
+			return new RedisCacheEntry(name + nodeId.toString() +  key, name + key , name, nodeCacheName, null, maxLifetime);	
 		}
 	}
 	

@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.contains;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory;
@@ -98,6 +99,38 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		assertEquals(aggr.getValue(), cache.get("TestKey").getValue());
 	}	
 	
+	@Test
+	public void testCacheObject_customAggregateList_localAndRemoteNodeCaches_assertCached()
+	{
+		final CustomAggregate aggr1 = new  CustomAggregate();
+		
+		aggr1.setValue("value1");
+		
+		final CustomAggregate aggr2 = new  CustomAggregate();
+		
+		aggr2.setValue("value2");
+		
+		final CustomAggregateListRedisClusteredCache<String, List<CustomAggregate>> cacheLocal = 
+				new CustomAggregateListRedisClusteredCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		final CustomAggregateListRedisClusteredCache<String, List<CustomAggregate>>cacheRemote = 
+				new CustomAggregateListRedisClusteredCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,1}));
+		
+		cacheLocal.put("TestKey", Collections.singletonList(aggr1));
+		
+		cacheRemote.put("TestKey", Collections.singletonList(aggr2));
+		
+		List<CustomAggregate> cachedVals = cacheLocal.get("TestKey");
+		
+		assertEquals(2, cachedVals.size());
+		
+		cacheLocal.purgeClusteredNodeCaches(NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		cachedVals = cacheLocal.get("TestKey");
+		
+		assertEquals(1, cachedVals.size());
+	}		
+	
 	protected static class CustomAggregate
 	{
 		private String value;
@@ -122,6 +155,16 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	{
 
 		public CustomAggregateRedisClusteredCache(java.lang.String name, long maxSize, long maxLifetime,
+				NodeID nodeId) {
+			super(name, maxSize, maxLifetime, nodeId);
+		}
+
+	}
+	
+	protected static class CustomAggregateListRedisClusteredCache<K extends String, V extends List<CustomAggregate>> extends RedisClusteredCache<K, V>
+	{
+
+		public CustomAggregateListRedisClusteredCache(java.lang.String name, long maxSize, long maxLifetime,
 				NodeID nodeId) {
 			super(name, maxSize, maxLifetime, nodeId);
 		}

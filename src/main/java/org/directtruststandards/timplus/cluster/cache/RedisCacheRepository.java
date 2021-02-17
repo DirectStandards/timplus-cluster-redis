@@ -28,8 +28,22 @@ public interface RedisCacheRepository extends CrudRepository<RedisCacheEntry, St
 	public Collection<RedisCacheEntry> findByCacheName(String name);
 	
 	/**
+	 * Retrieves entries by the clustered cache key.
+	 * @param name The clustered cache key.
+	 * @return All entries in the cache matching the clustered cache key.
+	 */
+	public Collection<RedisCacheEntry> findByClusteredCacheKey(String name);
+	
+	/**
 	 * Deletes entries by node cache name.
 	 * @param name The node cache name: CacheName + Node ID
 	 */
 	public void deleteByNodeCacheName(String name);
+	
+	
+	/**
+	 * Delete by the cluster cache key;
+	 * @param name The node cache name
+	 */
+	public void deleteByClusteredCacheKey(String name);
 }
