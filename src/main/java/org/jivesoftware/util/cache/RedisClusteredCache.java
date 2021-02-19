@@ -1,5 +1,10 @@
 package org.jivesoftware.util.cache;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.Externalizable;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.AbstractMap;
@@ -13,10 +18,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.commons.codec.binary.Base64;
 import org.directtruststandards.timplus.cluster.cache.CachingConfiguration;
 import org.directtruststandards.timplus.cluster.cache.RedisCacheEntry;
 import org.directtruststandards.timplus.cluster.cache.RedisCacheRepository;
 import org.jivesoftware.openfire.cluster.NodeID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Example;
 
@@ -33,6 +41,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 {
+    private static final Logger Log = LoggerFactory.getLogger(RedisClusteredCache.class);
+	
     protected long maxCacheSize;
 
     protected long maxLifetime;
@@ -272,7 +282,7 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public void purgeClusteredNodeCaches(NodeID node) 
 	{
-		
+		Log.info("Purging cluster cache {} on node {}", name, node.toString());
 		final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());
 		
 		remotelyCached.deleteAll(entries);
@@ -297,7 +307,19 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	{
 		try
 		{
-			final String mappedValue = objectMapper.writeValueAsString(value);
+			String mappedValue = "";
+			
+			// check and see if the value has it's own wrapping
+			if (value instanceof Externalizable)
+			{
+				final ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+				final ObjectOutputStream obOutStream = new ObjectOutputStream(outStream);
+				((Externalizable)value).writeExternal(obOutStream);
+				obOutStream.flush();
+				mappedValue = Base64.encodeBase64String(outStream.toByteArray());
+			}
+			else
+				mappedValue = objectMapper.writeValueAsString(value);
 		
 			return new RedisCacheEntry(name + nodeId.toString() +  key, name + key, name, nodeCacheName, mappedValue, maxLifetime);	
 		}
@@ -307,11 +329,24 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		}
 	}
 	
+	@SuppressWarnings("unchecked")
 	protected V deserializedRedisCacheEntryValue(String serialized)
 	{
 		try
 		{
-			return objectMapper.readValue(serialized, getDeserilizedValueType());
+			Class<?> obType = objectMapper.getTypeFactory().constructType(getDeserilizedValueType()).getRawClass();
+			if (Externalizable.class.isAssignableFrom(obType))
+			{
+				 final ByteArrayInputStream inStream = new ByteArrayInputStream(Base64.decodeBase64(serialized));
+				 final ObjectInputStream obInStream = new ObjectInputStream(inStream);
+				 
+				 V retVal = (V)obType.newInstance();
+				 ((Externalizable)retVal).readExternal(obInStream);
+				 
+				 return retVal;
+			}
+			else
+				return objectMapper.readValue(serialized, getDeserilizedValueType());
 		}
 		catch (Exception e)
 		{

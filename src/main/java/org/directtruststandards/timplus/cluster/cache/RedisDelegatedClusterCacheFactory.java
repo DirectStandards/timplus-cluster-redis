@@ -4,11 +4,15 @@ package org.directtruststandards.timplus.cluster.cache;
 import java.io.Serializable;
 import java.util.List;
 
+import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.cluster.NodeID;
+import org.jivesoftware.openfire.session.ClientSessionInfo;
 import org.jivesoftware.openfire.session.DomainPair;
 import org.jivesoftware.openfire.spi.ClientRoute;
 import org.jivesoftware.openfire.spi.RoutingTableImpl;
 import org.jivesoftware.util.cache.Cache;
+import org.jivesoftware.util.cache.DefaultExternalizableUtilStrategy;
+import org.jivesoftware.util.cache.ExternalizableUtil;
 import org.jivesoftware.util.cache.RedisClusteredCache;
 
 /**
@@ -18,7 +22,11 @@ import org.jivesoftware.util.cache.RedisClusteredCache;
  */
 public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCacheFactory
 {
-
+	static
+	{
+		ExternalizableUtil.getInstance().setStrategy(new DefaultExternalizableUtilStrategy());
+	}
+	
 	/**
 	 * Empty constructor
 	 */
@@ -57,7 +65,12 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 			{
 				retVal =  new StringStringListRouteCache<String, List<String>>(name, maxSize, maxLifetime, nodeId);
 				break;
-			}	
+			}
+			case SessionManager.C2S_INFO_CACHE_NAME:
+			{
+				retVal =  new StringClientSessionInfoCache<String, ClientSessionInfo>(name, maxSize, maxLifetime, nodeId);
+				break;
+			}			
 			default:
 				retVal = new GenericRouteCache<Serializable, Serializable>(name, maxSize, maxLifetime, nodeId); 
 		}
@@ -91,6 +104,13 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 		public StringStringListRouteCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
 			super(name, maxSize, maxLifetime, nodeId);
 		}	
+	}
+	
+	public static class StringClientSessionInfoCache<K extends String, V extends ClientSessionInfo> extends RedisClusteredCache<K,V>
+	{
+		public StringClientSessionInfoCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
+			super(name, maxSize, maxLifetime, nodeId);
+		}			
 	}
 	
 	public static class GenericRouteCache<K extends Serializable, V extends Serializable> extends RedisClusteredCache<K,V>

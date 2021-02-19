@@ -1,7 +1,11 @@
 package org.jivesoftware.util.cache;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.hamcrest.Matchers.contains;
 
 import java.io.Serializable;
@@ -11,12 +15,17 @@ import java.util.List;
 
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientSessionInfoCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringNodeIdListRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringStringListRouteCache;
 import org.directtruststandards.timplus.cluster.cache.SpringBaseTest;
 import org.jivesoftware.openfire.cluster.NodeID;
+import org.jivesoftware.openfire.session.ClientSessionInfo;
 import org.jivesoftware.openfire.session.DomainPair;
+import org.jivesoftware.openfire.session.LocalClientSession;
 import org.junit.jupiter.api.Test;
+import org.xmpp.packet.JID;
+import org.xmpp.packet.Presence;
 
 public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 {
@@ -83,6 +92,38 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		
 		assertEquals(node, cache.get(key));
 	}		
+	
+	@Test
+	public void testCacheObject_stringClientInfoSession_assertCached()
+	{
+		final Cache<String, ClientSessionInfo> cache = new StringClientSessionInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		final JID fromJid = new JID("testFrom", "domain", "x9dkelw");
+		
+		final Presence pres = new Presence();
+		pres.setTo(new JID("testTo", "domain", null));
+		pres.setFrom(fromJid.asBareJID());
+		pres.setType(Presence.Type.probe);
+		
+		
+		final LocalClientSession clientSession = mock(LocalClientSession.class);
+		when(clientSession.getPresence()).thenReturn(pres);
+		when(clientSession.isOfflineFloodStopped()).thenReturn(true);
+		when(clientSession.isMessageCarbonsEnabled()).thenReturn(false);
+		when(clientSession.hasRequestedBlocklist()).thenReturn(false);
+		
+		final ClientSessionInfo sessionInfo = new ClientSessionInfo(clientSession);
+
+		
+		cache.put(fromJid.toString(), sessionInfo);
+		
+		final ClientSessionInfo retSessionInfo = cache.get(fromJid.toString());
+		
+		assertNotNull(retSessionInfo);
+		
+		assertEquals(pres.toXML(), retSessionInfo.getPresence().toXML());
+
+	}	
 	
 	@Test
 	public void testCacheObject_customAggregate_assertCached()

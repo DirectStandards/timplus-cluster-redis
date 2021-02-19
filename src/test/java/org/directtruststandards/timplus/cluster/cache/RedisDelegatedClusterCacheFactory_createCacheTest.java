@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.GenericRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientRouteCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientSessionInfoCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringNodeIdListRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringStringListRouteCache;
+import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.jivesoftware.openfire.spi.RoutingTableImpl;
 import org.jivesoftware.util.cache.Cache;
@@ -49,5 +51,10 @@ public class RedisDelegatedClusterCacheFactory_createCacheTest extends SpringBas
 		
 		assertNotNull(cache);
 		assertTrue(cache instanceof StringStringListRouteCache);
+		
+		cache = factory.createCache(SessionManager.C2S_INFO_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,0}) );
+		
+		assertNotNull(cache);
+		assertTrue(cache instanceof StringClientSessionInfoCache);		
 	}
 }
