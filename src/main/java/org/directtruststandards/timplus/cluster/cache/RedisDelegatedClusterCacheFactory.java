@@ -6,11 +6,15 @@ import java.util.List;
 
 import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.cluster.NodeID;
+import org.jivesoftware.openfire.filetransfer.proxy.ClusterCrossProxyInfo;
+import org.jivesoftware.openfire.filetransfer.proxy.ProxyConnectionManager;
+import org.jivesoftware.openfire.roster.Roster;
 import org.jivesoftware.openfire.session.ClientSessionInfo;
 import org.jivesoftware.openfire.session.DomainPair;
 import org.jivesoftware.openfire.spi.ClientRoute;
 import org.jivesoftware.openfire.spi.RoutingTableImpl;
 import org.jivesoftware.util.cache.Cache;
+import org.jivesoftware.util.cache.ClusteredCacheFactory;
 import org.jivesoftware.util.cache.DefaultExternalizableUtilStrategy;
 import org.jivesoftware.util.cache.ExternalizableUtil;
 import org.jivesoftware.util.cache.RedisClusteredCache;
@@ -70,7 +74,17 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 			{
 				retVal =  new StringClientSessionInfoCache<String, ClientSessionInfo>(name, maxSize, maxLifetime, nodeId);
 				break;
-			}			
+			}	
+			case ClusteredCacheFactory.ROSTER_CACHE_NAME:
+			{
+				retVal =  new StringRosterCache<String, Roster>(name, maxSize, maxLifetime, nodeId);
+				break;
+			}	
+			case ProxyConnectionManager.CLUSTER_CROSS_PROXY_MAP_CACHE_NAME:
+			{
+				retVal =  new StringClusterCrossProxyInfoCache<String, ClusterCrossProxyInfo>(name, maxSize, maxLifetime, nodeId);
+				break;
+			}				
 			default:
 				retVal = new GenericRouteCache<Serializable, Serializable>(name, maxSize, maxLifetime, nodeId); 
 		}
@@ -109,6 +123,20 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 	public static class StringClientSessionInfoCache<K extends String, V extends ClientSessionInfo> extends RedisClusteredCache<K,V>
 	{
 		public StringClientSessionInfoCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
+			super(name, maxSize, maxLifetime, nodeId);
+		}			
+	}
+	
+	public static class StringRosterCache<K extends String, V extends Roster> extends RedisClusteredCache<K,V>
+	{
+		public StringRosterCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
+			super(name, maxSize, maxLifetime, nodeId);
+		}			
+	}	
+	
+	public static class StringClusterCrossProxyInfoCache<K extends String, V extends ClusterCrossProxyInfo> extends RedisClusteredCache<K,V>
+	{
+		public StringClusterCrossProxyInfoCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
 			super(name, maxSize, maxLifetime, nodeId);
 		}			
 	}

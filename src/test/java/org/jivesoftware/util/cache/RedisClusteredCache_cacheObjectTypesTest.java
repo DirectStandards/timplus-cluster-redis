@@ -4,22 +4,43 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.hamcrest.Matchers.contains;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientSessionInfoCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClusterCrossProxyInfoCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringNodeIdListRouteCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringRosterCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringStringListRouteCache;
 import org.directtruststandards.timplus.cluster.cache.SpringBaseTest;
+import org.jivesoftware.openfire.cluster.ClusterNode;
+import org.jivesoftware.openfire.cluster.ClusterNodeStatus;
 import org.jivesoftware.openfire.cluster.NodeID;
+import org.jivesoftware.openfire.filetransfer.proxy.ClusterCrossProxyInfo;
+import org.jivesoftware.openfire.filetransfer.proxy.credentials.ProxyServerCredential;
+import org.jivesoftware.openfire.roster.Roster;
+import org.jivesoftware.openfire.roster.RosterItem;
+import org.jivesoftware.openfire.roster.RosterItem.AskType;
+import org.jivesoftware.openfire.roster.RosterItem.RecvType;
+import org.jivesoftware.openfire.roster.RosterItem.SubType;
 import org.jivesoftware.openfire.session.ClientSessionInfo;
 import org.jivesoftware.openfire.session.DomainPair;
 import org.jivesoftware.openfire.session.LocalClientSession;
@@ -124,6 +145,94 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		assertEquals(pres.toXML(), retSessionInfo.getPresence().toXML());
 
 	}	
+	
+	@Test
+	public void testCacheObject_stringRoster_assertCached()
+	{
+		final Cache<String, Roster> cache = new StringRosterCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		final List<String> groups = new LinkedList<>();
+		groups.add("TestGroup");
+		
+		final RosterItem rosterItem = new RosterItem(12345, new JID("ah4626", "test.com", null),
+				SubType.BOTH, AskType.SUBSCRIBE, RecvType.SUBSCRIBE, "nickname", groups);
+		
+		final ConcurrentMap<String, RosterItem> rosterItems = new ConcurrentHashMap<>();
+		rosterItems.put("ah4626@test.com", rosterItem);
+		
+		
+		final Roster roster = new Roster();
+		roster.setUsername("gm2552");
+		roster.setDomain("test.com");
+		roster.setRosterItems(rosterItems);
+		
+		cache.put("gm2552@test.com", roster);
+		
+		final Roster readRoster = cache.get("gm2552@test.com");
+		
+		assertEquals("gm2552", readRoster.getUsername());
+		final Collection<RosterItem> readRosterItems = readRoster.getRosterItems();
+		assertEquals(1, readRosterItems.size());
+		
+		final RosterItem readRosterItem = readRosterItems.iterator().next();
+		assertEquals(rosterItem.getID(), readRosterItem.getID());
+		assertEquals(rosterItem.getJid(), readRosterItem.getJid());
+		assertEquals(rosterItem.getAskStatus(), readRosterItem.getAskStatus());
+		assertEquals(rosterItem.getSubStatus(), readRosterItem.getSubStatus());
+		assertEquals(rosterItem.getRecvStatus(), readRosterItem.getRecvStatus());
+		assertEquals(rosterItem.getNickname(), readRosterItem.getNickname());
+		
+		assertEquals(1, readRosterItem.getGroups().size());
+		assertEquals("TestGroup", readRosterItem.getGroups().get(0));
+	}
+	
+	@Test
+	public void testCacheObject_stringClusterCrossProxyInfo_assertCached()
+	{
+		final Cache<String, ClusterCrossProxyInfo> cache = new StringClusterCrossProxyInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		final ProxyServerCredential cred = new ProxyServerCredential();
+		cred.setCreationDate(Calendar.getInstance().getTime());
+		cred.setSubject("subject");
+		cred.setSecret("secret");
+		cred.setSecretHash(new byte[] {0,1,1,1});
+		
+		final ClusterNode node = new ClusterNode();
+		node.setLastNodeHBDtTm(Instant.now());
+		node.setNodeHost("test");
+		node.setNodeId(NodeID.getInstance(new byte[] {0,0,0,0}));
+		node.setNodeIP("127.0.0.1");
+		node.setNodeJoinedDtTm(Instant.now());
+		node.setNodeStatus(ClusterNodeStatus.NODE_JOINED);
+		
+		
+		final ClusterCrossProxyInfo proxyInfo = new ClusterCrossProxyInfo();
+		proxyInfo.setPort(7777);
+		proxyInfo.setResponseDigest("12345");
+		proxyInfo.setProxyServiceCredential(cred);
+		proxyInfo.setReceiversClusterNode(node);
+		
+		
+		cache.put(proxyInfo.getResponseDigest(), proxyInfo);
+		
+		final ClusterCrossProxyInfo retProxyInfo = cache.get(proxyInfo.getResponseDigest());
+		
+		/*
+		 * Testing retrieval of relevant fields for proxy data transfers
+		 */
+		assertNotNull(retProxyInfo);
+		
+		assertEquals(proxyInfo.getPort(), retProxyInfo.getPort());
+		assertEquals(proxyInfo.getResponseDigest(), retProxyInfo.getResponseDigest());
+		
+		final ProxyServerCredential retCred = retProxyInfo.getProxyServiceCredential();
+		assertEquals(cred.getSubject(), retCred.getSubject());
+		assertEquals(cred.getSecret(), retCred.getSecret());
+		
+		final ClusterNode retNode = retProxyInfo.getReceiversClusterNode();
+		assertEquals(node.getNodeHost(), retNode.getNodeHost());
+		assertEquals(node.getNodeIP(), retNode.getNodeIP());
+	}		
 	
 	@Test
 	public void testCacheObject_customAggregate_assertCached()
