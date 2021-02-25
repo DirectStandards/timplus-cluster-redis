@@ -3,9 +3,10 @@ package org.directtruststandards.timplus.cluster.cache;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 
-import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.annotation.Configuration;
 
 import redis.embedded.RedisServer;
@@ -16,7 +17,7 @@ public class TestApplication
 {
 	public static void main(String[] args) 
 	{
-		SpringApplication.run(TestApplication.class, args);
+		new SpringApplicationBuilder(TestApplication.class).web(WebApplicationType.NONE).run(args);
 	}
 	
     private RedisServer redisServer;
