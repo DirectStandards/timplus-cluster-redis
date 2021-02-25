@@ -85,6 +85,16 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
         valueType =  ((ParameterizedType) superClass).getActualTypeArguments()[1];
     }
     
+    /**
+     * Indicates if items in this cache should only ever hold a single entry per clustered cached key.
+     * If true, then any attempt to write a new value for a given key should overwrite the previous entry.
+     * @return Indicates if items in this cache should only ever hold a single entry per clustered cached key.
+     */
+    public boolean isSingletonCrossClusterCache()
+    {
+    	return false;
+    }
+    
 	@Override
 	public String getName() 
 	{
@@ -253,6 +263,11 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public V put(Object key, Object value) 
 	{
+		if (isSingletonCrossClusterCache())
+		{
+			// clobber all existing instances of this key for this cache
+			remotelyCached.deleteAll(remotelyCached.findByClusteredCacheKey(name + key));
+		}
 		
 		remotelyCached.save(createSafeRedisCacheEntry(key, value));
 		

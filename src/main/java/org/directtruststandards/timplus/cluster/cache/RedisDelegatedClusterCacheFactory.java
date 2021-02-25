@@ -131,14 +131,20 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 	{
 		public StringRosterCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
 			super(name, maxSize, maxLifetime, nodeId);
-		}			
+		}	
+		
+		@Override
+		public boolean isSingletonCrossClusterCache()
+		{
+			return true;
+		}
 	}	
 	
 	public static class StringClusterCrossProxyInfoCache<K extends String, V extends ClusterCrossProxyInfo> extends RedisClusteredCache<K,V>
 	{
 		public StringClusterCrossProxyInfoCache(String name, long maxSize, long maxLifetime, NodeID nodeId) {
 			super(name, maxSize, maxLifetime, nodeId);
-		}			
+		}		
 	}
 	
 	public static class GenericRouteCache<K extends Serializable, V extends Serializable> extends RedisClusteredCache<K,V>
