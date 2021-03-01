@@ -14,7 +14,7 @@ public class RedisClusteredCache_constructorTest extends SpringBaseTest
 	@Test
 	public void testConstructRedisClusteredCache_assertSuccessfullyCreated() throws Exception
 	{
-		final RedisClusteredCache<String, ClientRoute> cache = new StringClientRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final RedisClusteredCache<String, ClientRoute> cache = new StringClientRouteCache<>("JUnitCache", 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		assertNotNull(cache);
 		assertNotNull(cache.remotelyCached);

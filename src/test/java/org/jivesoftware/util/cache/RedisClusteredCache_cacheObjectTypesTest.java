@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -36,6 +37,8 @@ import org.jivesoftware.openfire.cluster.ClusterNodeStatus;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.jivesoftware.openfire.filetransfer.proxy.ClusterCrossProxyInfo;
 import org.jivesoftware.openfire.filetransfer.proxy.credentials.ProxyServerCredential;
+import org.jivesoftware.openfire.muc.spi.LocalMUCRoom;
+import org.jivesoftware.openfire.muc.spi.LocalMUCRoomManager;
 import org.jivesoftware.openfire.roster.Roster;
 import org.jivesoftware.openfire.roster.RosterItem;
 import org.jivesoftware.openfire.roster.RosterItem.AskType;
@@ -55,7 +58,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	public void testCacheObject_genericType_assertCached()
 	{
 		final Cache<Serializable, Serializable> cache = 
-				(Cache<Serializable, Serializable>)new RedisDelegatedClusterCacheFactory().createCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+				(Cache<Serializable, Serializable>)new RedisDelegatedClusterCacheFactory().createCache("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		cache.put("TestKey", "TestValue");
 		
@@ -65,7 +68,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_stringListType_assertCached()
 	{
-		final Cache<String, ArrayList<String>> cache = new StringStringListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, ArrayList<String>> cache = new StringStringListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		final String str1 = "value1";
 		final String str2 = "value2";
@@ -84,7 +87,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_nodeIdList_assertCached()
 	{
-		final Cache<String, List<NodeID>> cache = new StringNodeIdListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, List<NodeID>> cache = new StringNodeIdListRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		NodeID node1 = NodeID.getInstance(new byte[] {0,0,0,1});
 		NodeID node2 = NodeID.getInstance(new byte[] {0,0,0,1});
@@ -103,7 +106,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_domainPairKey_nodeIdValue_assertCached()
 	{
-		final Cache<DomainPair, NodeID> cache = new DomainPairNodeIdRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<DomainPair, NodeID> cache = new DomainPairNodeIdRouteCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		NodeID node = NodeID.getInstance(new byte[] {0,0,0,1});
 		
@@ -117,7 +120,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_stringClientInfoSession_assertCached()
 	{
-		final Cache<String, ClientSessionInfo> cache = new StringClientSessionInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, ClientSessionInfo> cache = new StringClientSessionInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		final JID fromJid = new JID("testFrom", "domain", "x9dkelw");
 		
@@ -149,7 +152,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_stringRoster_assertCached()
 	{
-		final Cache<String, Roster> cache = new StringRosterCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, Roster> cache = new StringRosterCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		final List<String> groups = new LinkedList<>();
 		groups.add("TestGroup");
@@ -189,7 +192,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 	@Test
 	public void testCacheObject_stringClusterCrossProxyInfo_assertCached()
 	{
-		final Cache<String, ClusterCrossProxyInfo> cache = new StringClusterCrossProxyInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}));
+		final Cache<String, ClusterCrossProxyInfo> cache = new StringClusterCrossProxyInfoCache<>("JUnitCache", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), true);
 		
 		final ProxyServerCredential cred = new ProxyServerCredential();
 		cred.setCreationDate(Calendar.getInstance().getTime());
@@ -233,6 +236,24 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		assertEquals(node.getNodeHost(), retNode.getNodeHost());
 		assertEquals(node.getNodeIP(), retNode.getNodeIP());
 	}		
+	
+	@Test
+	public void testCacheObject_stringLocalMUCRoom_assertCached()
+	{
+		final String roomName = UUID.randomUUID().toString();
+		
+		final RedisDelegatedClusterCacheFactory factory = new RedisDelegatedClusterCacheFactory();
+		final Cache<String, LocalMUCRoom> cache = 
+				(Cache<String, LocalMUCRoom>)factory.createCache(LocalMUCRoomManager.LOCAL_ROOM_MANAGER_CACHE_BASE_NAME + "groupchat.testdomain.com", -1, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), false);
+
+		final LocalMUCRoom room = new LocalMUCRoom();
+		
+		cache.put(roomName, room);
+		
+		final LocalMUCRoom readRoom = cache.get(roomName);
+		
+		//assertNotNull(readRoom);
+	}
 	
 	@Test
 	public void testCacheObject_customAggregate_assertCached()
@@ -306,7 +327,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 
 		public CustomAggregateRedisClusteredCache(java.lang.String name, long maxSize, long maxLifetime,
 				NodeID nodeId) {
-			super(name, maxSize, maxLifetime, nodeId);
+			super(name, maxSize, maxLifetime, nodeId, true);
 		}
 
 	}
@@ -316,7 +337,7 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 
 		public CustomAggregateListRedisClusteredCache(java.lang.String name, long maxSize, long maxLifetime,
 				NodeID nodeId) {
-			super(name, maxSize, maxLifetime, nodeId);
+			super(name, maxSize, maxLifetime, nodeId, true);
 		}
 
 	}

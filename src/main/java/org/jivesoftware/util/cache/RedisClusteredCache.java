@@ -61,12 +61,15 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
     
     protected Type valueType; 
     
-    public RedisClusteredCache(final String name, final long maxSize, final long maxLifetime, final NodeID nodeId)
+    protected boolean nodePurgable;
+    
+    public RedisClusteredCache(final String name, final long maxSize, final long maxLifetime, final NodeID nodeId, boolean nodePurgable)
     {
     	this.name = name;
     	this.maxCacheSize = maxSize;
     	this.maxLifetime = maxLifetime;
     	this.nodeId = nodeId;
+    	this.nodePurgable = nodePurgable;
     	
 		final ApplicationContext ctx = CachingConfiguration.getApplicationContext();
 		
@@ -297,11 +300,13 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public void purgeClusteredNodeCaches(NodeID node) 
 	{
-		Log.info("Purging cluster cache {} on node {}", name, node.toString());
-		final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());
-		
-		remotelyCached.deleteAll(entries);
-		
+		if (this.nodePurgable)
+		{
+			Log.info("Purging cluster cache {} on node {}", name, node.toString());
+			final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());
+			
+			remotelyCached.deleteAll(entries);
+		}
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -318,6 +323,12 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		}
 	}
 
+	@Override
+    public boolean isNodeCachePurgeable()
+    {
+		return nodePurgable;
+    }
+	
 	protected RedisCacheEntry createSafeRedisCacheEntry(Object key, Object value)
 	{
 		try
@@ -340,6 +351,7 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		}
 		catch (Exception e)
 		{
+			Log.error("Error serializing cache entry.  Setting entry to null value.", e);
 			return new RedisCacheEntry(name + nodeId.toString() +  key, name + key , name, nodeCacheName, null, maxLifetime);	
 		}
 	}
@@ -365,6 +377,7 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		}
 		catch (Exception e)
 		{
+			Log.error("Error deserializing cache entry.  Retuning null.", e);
 			return null;
 		}
 	}
