@@ -5,7 +5,7 @@
 	<groupId>org.directtruststandards</groupId>
 	<artifactId>timplus-cluster-redis</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
-	<name>timplus-cluster-redis</name>
+	<name>TIM+ Cluster Redis Cache Implementation</name>
 	<description>TIM+ cluster cache backed by Redis</description>
     <parent>
 	   <groupId>org.springframework.boot</groupId>
