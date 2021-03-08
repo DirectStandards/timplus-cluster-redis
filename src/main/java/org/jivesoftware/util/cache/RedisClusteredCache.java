@@ -294,13 +294,13 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	@Override
 	public void clear() 
 	{
-		remotelyCached.deleteAll(remotelyCached.findByNodeCacheName(nodeCacheName));
+		purgeClusteredNodeCaches(nodeId);
 	}
 
 	@Override
 	public void purgeClusteredNodeCaches(NodeID node) 
 	{
-		if (this.nodePurgable)
+		if (this.nodePurgable && !isSingletonCrossClusterCache())
 		{
 			Log.info("Purging cluster cache {} on node {}", name, node.toString());
 			final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());

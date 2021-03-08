@@ -28,8 +28,6 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		
 		cache.put("TestKey", "TestValue");
 		
-		//assertEquals("TestValue", objectMapper.readValue(cache.remotelyCached.findById("JUnitCacheTestKey").get().getValue(), Object.class));
-		
 		assertEquals("TestValue", cache.get("TestKey"));
 	}
 	
@@ -262,7 +260,7 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 	}	
 	
 	@Test
-	public void testCacheObjects_purgeNodeCacheByNode_notPurable_assertNotPurged() throws Exception
+	public void testCacheObjects_purgeNodeCacheByNode_notPurgable_assertNotPurged() throws Exception
 	{	
 		final String entryValue =  UUID.randomUUID().toString();
 		
@@ -271,6 +269,28 @@ public class RedisClusteredCache_cacheOperationsTest extends SpringBaseTest
 		final String entryKey = UUID.randomUUID().toString();
 		
 		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), false);
+		
+		cache.put(entryKey, entryValue);
+		
+		cache.purgeClusteredNodeCaches(NodeID.getInstance(new byte[] {0,0,0,1}));
+		
+		assertEquals(1, cache.size());
+		
+		cache.purgeClusteredNodeCaches(NodeID.getInstance(new byte[] {0,0,0,0}));
+		
+		assertEquals(1, cache.size());
+	}
+	
+	@Test
+	public void testCacheObjects_purgeNodeCacheByNode_singletonClusterCache_assertNotPurged() throws Exception
+	{
+		final String entryValue =  UUID.randomUUID().toString();
+		
+		final String cacheName = UUID.randomUUID().toString();
+		
+		final String entryKey = UUID.randomUUID().toString();
+		
+		final RedisClusteredCache<Serializable, Serializable> cache = new GenericRouteCache<>(cacheName, 50, 50000, NodeID.getInstance(new byte[] {0,0,0,0}), false, true);
 		
 		cache.put(entryKey, entryValue);
 		

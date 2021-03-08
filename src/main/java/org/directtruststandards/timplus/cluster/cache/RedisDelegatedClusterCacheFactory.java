@@ -172,8 +172,23 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 	
 	public static class GenericRouteCache<K extends Serializable, V extends Serializable> extends RedisClusteredCache<K,V>
 	{
-		public GenericRouteCache(String name, long maxSize, long maxLifetime, NodeID nodeId, boolean nodePurgable) {
-			super(name, maxSize, maxLifetime, nodeId, nodePurgable);
+		protected boolean singletonCrossClusterCache;
+		
+		public GenericRouteCache(String name, long maxSize, long maxLifetime, NodeID nodeId, boolean nodePurgable) 
+		{
+			this(name, maxSize, maxLifetime, nodeId, nodePurgable, false);
 		}	
+		
+		public GenericRouteCache(String name, long maxSize, long maxLifetime, NodeID nodeId, boolean nodePurgable, boolean singletonCrossClusterCache) 
+		{
+			super(name, maxSize, maxLifetime, nodeId, nodePurgable);
+			this.singletonCrossClusterCache = singletonCrossClusterCache;
+		}
+		
+		@Override
+		public boolean isSingletonCrossClusterCache()
+		{
+			return singletonCrossClusterCache;
+		}
 	}		
 }
