@@ -1,5 +1,7 @@
 package org.jivesoftware.util.cache;
 
+import static org.junit.Assume.assumeFalse;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.Externalizable;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.codec.binary.Base64;
 import org.directtruststandards.timplus.cluster.cache.CachingConfiguration;
@@ -25,8 +28,16 @@ import org.directtruststandards.timplus.cluster.cache.RedisCacheRepository;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Example;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.ReactiveListOperations;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ReactiveSetOperations;
+import org.springframework.data.redis.core.ScanOptions;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,7 +53,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 {
     private static final Logger Log = LoggerFactory.getLogger(RedisClusteredCache.class);
-	
+
+    private static final String REPOSITORY_PREFIX = "timplusclustercache:";
+    
+    private static final String NODE_CACHE_SCAN_KEY_PREFIX = REPOSITORY_PREFIX + "nodeCacheName:";
+    
     protected long maxCacheSize;
 
     protected long maxLifetime;
@@ -78,7 +93,7 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 
 		remotelyCached = ctx.getBean(RedisCacheRepository.class);
 		
-		objectMapper = ctx.getBean(ObjectMapper.class);
+		objectMapper = ctx.getBean(ObjectMapper.class);		
 		
 		nodeCacheName = name + nodeId.toString();
 
@@ -161,9 +176,19 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	{
 		final Collection<V> retVal = new LinkedList<>();
 		
-		Collection<RedisCacheEntry> values = remotelyCached.findByCacheName(name);
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, name, (String)null, (String)null, maxLifetime);
 		
-		values.forEach(val -> retVal.add(deserializedRedisCacheEntryValue(val.getValue())));
+		final Pageable pageParam = PageRequest.of(0, 500);
+		Page<RedisCacheEntry> page = null;
+		do
+		{			
+			if (page == null)
+				page = remotelyCached.findAll(Example.of(probe), pageParam);
+			else
+				page = remotelyCached.findAll(Example.of(probe), page.nextPageable());
+				
+			page.toList().forEach(val -> retVal.add(deserializedRedisCacheEntryValue(val.getValue())));
+		} while(page.hasNext());		
 		
 		return Collections.unmodifiableCollection(retVal);
 	}
@@ -174,11 +199,21 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	{
 		final Set<Entry<K, V>> retVal = new HashSet<>();
 
-		Collection<RedisCacheEntry> values = remotelyCached.findByNodeCacheName(name + nodeId.toString());		
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, (String)null, name + nodeId.toString(), (String)null, maxLifetime);
 		
-		values.forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getClusteredCacheKey().substring(name.length()), 
-				deserializedRedisCacheEntryValue(val.getValue()))));
-		
+		final Pageable pageParam = PageRequest.of(0, 500);
+		Page<RedisCacheEntry> page = null;
+		do
+		{			
+			if (page == null)
+				page = remotelyCached.findAll(Example.of(probe), pageParam);
+			else
+				page = remotelyCached.findAll(Example.of(probe), page.nextPageable());
+				
+			page.toList().forEach(val -> retVal.add(new AbstractMap.SimpleEntry(val.getClusteredCacheKey().substring(name.length()), 
+					deserializedRedisCacheEntryValue(val.getValue()))));
+		} while(page.hasNext());	
+	
 		return Collections.unmodifiableSet(retVal);
 	}
 
@@ -188,9 +223,19 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 	{
 		final Set<K> retVal = new HashSet<>();
 		
-		Collection<RedisCacheEntry> values = remotelyCached.findByNodeCacheName(name + nodeId.toString());
+		final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, (String)null, name + nodeId.toString(), (String)null, maxLifetime);
 		
-		values.forEach(val -> retVal.add((K)val.getClusteredCacheKey().substring(name.length())));
+		final Pageable pageParam = PageRequest.of(0, 500);
+		Page<RedisCacheEntry> page = null;
+		do
+		{			
+			if (page == null)
+				page = remotelyCached.findAll(Example.of(probe), pageParam);
+			else
+				page = remotelyCached.findAll(Example.of(probe), page.nextPageable());
+				
+			page.toList().forEach(val -> retVal.add((K)val.getClusteredCacheKey().substring(name.length())));
+		} while(page.hasNext());		
 		
 		return Collections.unmodifiableSet(retVal);
 	}
@@ -303,9 +348,21 @@ public abstract class RedisClusteredCache<K,V> implements Cache<K,V>
 		if (this.nodePurgable && !isSingletonCrossClusterCache())
 		{
 			Log.info("Purging cluster cache {} on node {}", name, node.toString());
-			final Collection<RedisCacheEntry> entries = remotelyCached.findByNodeCacheName(name + node.toString());
 			
-			remotelyCached.deleteAll(entries);
+			/*
+			 * Caches can hold a lot of entries.  Getting the full list in one shot can kill Redis performance.
+			 * Page instead.
+			 */		
+			final RedisCacheEntry probe = new RedisCacheEntry((String)null, (String)null, (String)null, name + node.toString(), (String)null, maxLifetime);
+			
+			final Pageable pageParam = PageRequest.of(0, 500);
+			Page<RedisCacheEntry> page = null;
+			do
+			{				
+				page = remotelyCached.findAll(Example.of(probe), pageParam);
+				
+				remotelyCached.deleteAll(page.toList());
+			} while(page.toList().size() > 0);
 		}
 	}
 
