@@ -3,6 +3,7 @@ package org.directtruststandards.timplus.cluster.cache;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.cluster.NodeID;
@@ -10,6 +11,7 @@ import org.jivesoftware.openfire.filetransfer.proxy.ClusterCrossProxyInfo;
 import org.jivesoftware.openfire.filetransfer.proxy.ProxyConnectionManager;
 import org.jivesoftware.openfire.muc.spi.LocalMUCRoom;
 import org.jivesoftware.openfire.muc.spi.LocalMUCRoomManager;
+import org.jivesoftware.openfire.muc.spi.RemoteMUCCache;
 import org.jivesoftware.openfire.roster.Roster;
 import org.jivesoftware.openfire.session.ClientSessionInfo;
 import org.jivesoftware.openfire.session.DomainPair;
@@ -86,9 +88,18 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 			{
 				retVal =  new StringClusterCrossProxyInfoCache<String, ClusterCrossProxyInfo>(name, maxSize, maxLifetime, nodeId, nodePurgable);
 				break;
+			}	
+			case RemoteMUCCache.MUC_NICK_JID_CACHE_NAME:
+			{
+				retVal =  new CrossClusterStringStringCache<String, String>(name, maxSize, maxLifetime, nodeId, nodePurgable);
+				break;
+			}	
+			case RemoteMUCCache.MUC_OCCUPANT_CACHE_NAME:
+			{
+				retVal =  new CrossClusterStringStringMapCache<String, Map<String, String>>(name, maxSize, maxLifetime, nodeId, nodePurgable);
+				break;
 			}				
 			default:
-			
 			{
 				if (name.startsWith(LocalMUCRoomManager.LOCAL_ROOM_MANAGER_CACHE_BASE_NAME))
 				{
@@ -169,6 +180,32 @@ public class RedisDelegatedClusterCacheFactory implements DelegatedClusteredCach
 			return true;
 		}
 	}
+	
+	public static class CrossClusterStringStringCache<K extends String, V extends String> extends RedisClusteredCache<K,V>
+	{
+		public CrossClusterStringStringCache(String name, long maxSize, long maxLifetime, NodeID nodeId, boolean nodePurgable) {
+			super(name, maxSize, maxLifetime, nodeId, nodePurgable);
+		}		
+		
+		@Override
+		public boolean isSingletonCrossClusterCache()
+		{
+			return true;
+		}
+	}		
+	
+	public static class CrossClusterStringStringMapCache<K extends String, V extends Map<String, String>> extends RedisClusteredCache<K,V>
+	{
+		public CrossClusterStringStringMapCache(String name, long maxSize, long maxLifetime, NodeID nodeId, boolean nodePurgable) {
+			super(name, maxSize, maxLifetime, nodeId, nodePurgable);
+		}		
+		
+		@Override
+		public boolean isSingletonCrossClusterCache()
+		{
+			return true;
+		}
+	}	
 	
 	public static class GenericRouteCache<K extends Serializable, V extends Serializable> extends RedisClusteredCache<K,V>
 	{

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.CrossClusterStringStringCache;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.CrossClusterStringStringMapCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.GenericRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientRouteCache;
@@ -14,6 +16,7 @@ import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCache
 import org.jivesoftware.openfire.SessionManager;
 import org.jivesoftware.openfire.cluster.NodeID;
 import org.jivesoftware.openfire.muc.spi.LocalMUCRoomManager;
+import org.jivesoftware.openfire.muc.spi.RemoteMUCCache;
 import org.jivesoftware.openfire.spi.RoutingTableImpl;
 import org.jivesoftware.util.cache.Cache;
 import org.junit.jupiter.api.Test;
@@ -65,5 +68,19 @@ public class RedisDelegatedClusterCacheFactory_createCacheTest extends SpringBas
 		assertNotNull(cache);
 		assertTrue(cache instanceof StringLocalMUCRoomCache);
 		assertFalse(cache.isNodeCachePurgeable());
+	
+		cache = factory.createCache(RemoteMUCCache.MUC_NICK_JID_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,0}), false );
+		
+		assertNotNull(cache);
+		assertTrue(cache instanceof CrossClusterStringStringCache);
+		assertFalse(cache.isNodeCachePurgeable());	
+		
+		cache = factory.createCache(RemoteMUCCache.MUC_OCCUPANT_CACHE_NAME , 0, 0, NodeID.getInstance(new byte[] {0,0,0,0}), false );
+		
+		assertNotNull(cache);
+		assertTrue(cache instanceof CrossClusterStringStringMapCache);
+		assertFalse(cache.isNodeCachePurgeable());			
 	}
+	
+	
 }

@@ -5,8 +5,10 @@ import static org.mockito.Mockito.when;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -18,13 +20,16 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory;
+import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.CrossClusterStringStringMapCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.DomainPairNodeIdRouteCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClientSessionInfoCache;
 import org.directtruststandards.timplus.cluster.cache.RedisDelegatedClusterCacheFactory.StringClusterCrossProxyInfoCache;
@@ -39,6 +44,7 @@ import org.jivesoftware.openfire.filetransfer.proxy.ClusterCrossProxyInfo;
 import org.jivesoftware.openfire.filetransfer.proxy.credentials.ProxyServerCredential;
 import org.jivesoftware.openfire.muc.spi.LocalMUCRoom;
 import org.jivesoftware.openfire.muc.spi.LocalMUCRoomManager;
+import org.jivesoftware.openfire.muc.spi.RemoteMUCCache;
 import org.jivesoftware.openfire.roster.Roster;
 import org.jivesoftware.openfire.roster.RosterItem;
 import org.jivesoftware.openfire.roster.RosterItem.AskType;
@@ -251,9 +257,68 @@ public class RedisClusteredCache_cacheObjectTypesTest extends SpringBaseTest
 		cache.put(roomName, room);
 		
 		final LocalMUCRoom readRoom = cache.get(roomName);
-		
-		//assertNotNull(readRoom);
 	}
+	
+	@Test
+	public void testCacheObject_crossClusterStringStringCache_assertCached()
+	{
+		
+		final RedisDelegatedClusterCacheFactory factory = new RedisDelegatedClusterCacheFactory();
+		final Cache<String, String> cache1 = 
+				(Cache<String, String>)factory.createCache(RemoteMUCCache.MUC_NICK_JID_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,0}), false );
+
+		cache1.put("me@you.com", "me@testyou.com");
+		
+		assertEquals("me@testyou.com", cache1.get("me@you.com"));
+		
+
+		/*
+		 * Same cache different node... should act a one single cache stomping on the insert of the other node when using "put"
+		 */
+		final Cache<String, String> cache2 = 
+				(Cache<String, String>)factory.createCache(RemoteMUCCache.MUC_NICK_JID_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,1}), false );
+		
+		cache2.put("me@you.com", "me2@testyou.com");
+		
+		assertEquals("me2@testyou.com", cache1.get("me@you.com"));
+		
+		cache2.remove("me@you.com");
+		
+		assertNull(cache1.get("me@you.com"));
+	}	
+	
+	@Test
+	public void testCacheObject_crossClusterStringStringMapCache_assertCached()
+	{
+		Map<String, String> map = new HashMap<>();
+		
+		map.put("testName", "testValue");
+		
+		final RedisDelegatedClusterCacheFactory factory = new RedisDelegatedClusterCacheFactory();
+		final Cache<String, Map<String, String>> cache1 = 
+				(Cache<String, Map<String,String>>)factory.createCache(RemoteMUCCache.MUC_OCCUPANT_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,0}), false );
+
+		cache1.put("me@you.com", map);
+		
+		assertEquals(map, cache1.get("me@you.com"));
+		
+
+		/*
+		 * Same cache different node... should act a one single cache stomping on the insert of the other node when using "put"
+		 */
+		final Cache<String, Map<String, String>> cache2 = 
+				(Cache<String, Map<String, String>>)factory.createCache(RemoteMUCCache.MUC_OCCUPANT_CACHE_NAME, 0, 0, NodeID.getInstance(new byte[] {0,0,0,1}), false );
+		
+		map = new HashMap<>();
+		
+		cache2.put("me@you.com", map);
+		
+		assertTrue(cache1.get("me@you.com").isEmpty());
+		
+		cache2.remove("me@you.com");
+		
+		assertNull(cache1.get("me@you.com"));
+	}		
 	
 	@Test
 	public void testCacheObject_customAggregate_assertCached()
